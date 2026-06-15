@@ -19,7 +19,7 @@ with sync_playwright() as p:
         ],
     )
 
-    # Tworzymy tzw. kontekst, w którym udajemy prawdziwy system operacyjny i ekran
+    # Tworzymy nowy kontekst przeglądarki z niestandardowym User-Agent i innymi ustawieniami
     context = browser.new_context(
         user_agent=user_agent_string,
         viewport={"width": 1920, "height": 1080},
@@ -29,7 +29,7 @@ with sync_playwright() as p:
 
     page = context.new_page()
 
-    # Dodatkowe zabezpieczenie w JS przeciwko wykrywaniu Playwrighta
+    # Dodajemy skrypt inicjalizacyjny, który nadpisuje właściwość navigator.webdriver, aby wyglądało to tak, jakbyśmy nie byli botem
     page.add_init_script(
         "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
     )
@@ -37,17 +37,31 @@ with sync_playwright() as p:
     try:
         page.goto(url, wait_until="commit", timeout=20000)
 
-        # Czekamy na przycisk "ZAAKCEPTUJ WSZYSTKIE" i klikamy go, kiedy się pojawi (akceptacja cookies)
-        page.wait_for_selector('button:has-text("ZAAKCEPTUJ WSZYSTKIE")', timeout=5000)
-        page.click('button:has-text("ZAAKCEPTUJ WSZYSTKIE")')
+        # Obsługa banera cookies (RODO)
+        try:
+            print("Próbuję zamknąć baner cookies (RODO)...")
+            page.wait_for_selector(
+                'button:has-text("ZAAKCEPTUJ WSZYSTKIE")',
+                state="visible",
+                timeout=2000,
+            )
+            page.click('button:has-text("ZAAKCEPTUJ WSZYSTKIE")')
+            print("Baner cookies kliknięty.")
+        except Exception:
+            print(
+                "Baner RODO nie pojawił się lub ma inną strukturę – pomijam."
+            )
+
+        print("Czekam na obecność ceny w kodzie strony...")
 
         page.wait_for_selector("span.whole", state="attached", timeout=10000)
 
         html_content = page.content()
+
     except Exception as e:
-        print(f"\n[BŁĄD] Szczegóły: {e}")
-        # print("Zapisuję zrzut ekranu jako 'error_page_v3.png'...")
-        # page.screenshot(path="error_page_v3.png")
+        print(f"\n[KRYTYCZNY BŁĄD] Nie udało się pobrać ceny. Szczegóły: {e}")
+        print("Zapisuję zrzut ekranu jako 'error_page_v4.png'...")
+        page.screenshot(path="error_page_v4.png")
         html_content = None
 
     context.close()
